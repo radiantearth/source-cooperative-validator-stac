@@ -1,1 +1,4 @@
 click
+pystac
+rasterio
+pytest
