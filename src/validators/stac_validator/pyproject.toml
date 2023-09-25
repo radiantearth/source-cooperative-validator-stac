@@ -13,6 +13,7 @@ dependencies = [
     "click",
     "requests",
     "jsonschema",
+    "backoff",
 ]
 dynamic = ["version"]
 
