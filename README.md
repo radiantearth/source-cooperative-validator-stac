@@ -4,6 +4,7 @@
 Create a new conda environment and activate it using the following commands in the root of this repository:
 
 `conda create --name source-stac-validator python=3.8`
+
 `conda activate source-stac-validator`
 
 Next, install the dependencies required for development:
