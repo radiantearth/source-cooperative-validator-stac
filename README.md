@@ -12,13 +12,11 @@ Next, install the dependencies required for development:
 make install-stac
 ```
 
-Now, run `cd src`
-
 ## CLI
 
 ```
-python cli.py --help
-Usage: cli.py [OPTIONS] STAC_FILE
+stac-validate --help
+Usage: stac-validate [OPTIONS] STAC_FILE
 
   Main function for the `Source STAC Validator` command line tool. Validates a
   STAC file against the STAC specification and prints the validation results
@@ -54,9 +52,10 @@ Options:
   ```
 
 ## Example Usage
-`python cli.py https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --recursive`
+`stac-validate https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --recursive`
 ```
 Validation took: 17.33 seconds...
+The STAC object is valid!
 [
     {
         "version": "1.0.0",
@@ -124,15 +123,15 @@ Validation took: 17.33 seconds...
 ```
 ### No Recursive Validation and No Output
 
-`python cli.py https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --no_output`
+`stac-validate https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --no_output`
 ```
 Validation took: 1.72 seconds...
+The STAC object is valid!
 ```
 
 ## Building Container
 
-`docker build -t sc-validator-stac .`
+`docker build -t source-stac-validator -f Dockerfile.stac .`
 
 ## Example
-
-`docker run -it sc-validator-stac validate https://radiantearth.blob.core.windows.net/mlhub/rapidai4eo/stac-v1.0/catalog.json`
+`docker run source-stac-validator https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --no_output`

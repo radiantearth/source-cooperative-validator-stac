@@ -51,6 +51,7 @@ def item_collection_summary(message: List[Dict[str, Any]]) -> None:
     default="",
     help="Save full recursive output to log file (local filepath).",
 )
+
 def main(
     stac_file: str,
     recursive: bool,
@@ -99,6 +100,9 @@ def main(
     message = stac.message
     diff = end - start
     print(f"Validation took: {round(diff, 2)} seconds...")
+    validity = "The STAC object is "
+    if stac.valid: print(validity + "valid!")
+    else: print(validity + "invalid!")
     if no_output is False:
         click.echo(json.dumps(message, indent=4))
 

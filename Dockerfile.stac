@@ -1,0 +1,21 @@
+# Use an official Python runtime as a parent image
+FROM python:3.8
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the specific files needed for stac-validator
+COPY src/ /app
+
+COPY src/pyproject.toml /app
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -e .[stac]
+
+# Define environment variable
+ENV NAME source-stac-validator
+
+# Define an entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

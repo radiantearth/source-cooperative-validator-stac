@@ -12,15 +12,10 @@ requires-python = ">=3.8"
 dependencies = [
     "click",
     "requests",
-    "jsonschema",
-    "backoff",
+    "backoff"
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = ["pytest","flake8", "black"]
-
-[tool.setuptools]
-py-modules = []
-
-
+stac = ["jsonschema"]
