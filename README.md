@@ -135,3 +135,5 @@ The STAC object is valid!
 
 ## Example
 `docker run source-stac-validator https://raw.githubusercontent.com/stac-utils/stac-validator/main/tests/test_data/v100/catalog.json --no_output`
+
+stac-validate https://radiantearth.blob.core.windows.net/mlhub/rapidai4eo/stac-v1.0/catalog.json --recursive --no_output

@@ -1,5 +1,7 @@
 import json
 import os
+import time
+import sys
 from json.decoder import JSONDecodeError
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -16,6 +18,7 @@ from validators.stac_validator.stac_utilities import (
 
 from utils.utilities import (
     fetch_and_parse_json,
+    fetch_and_parse_file,
     is_valid_url,
 )
     
@@ -33,6 +36,8 @@ class StacValidate:
         log: str = "",
     ):
         self.stac_file = stac_file
+        self.items_validated = 0
+        self.start_time = time.time()
 
         self.message = []
         self.schema = custom
@@ -84,7 +89,7 @@ class StacValidate:
     def load(self) -> None:
         # Load the STAC object to be validated for. Fetches the STAC content, type and version
         
-        self.stac_content = fetch_and_parse_json(self.stac_file)
+        self.stac_content = fetch_and_parse_file(self.stac_file)
         self.stac_type = get_stac_type(self.stac_content).lower()
         self.version = self.stac_content["stac_version"]
     
@@ -137,10 +142,13 @@ class StacValidate:
                 self.stac_content["stac_extensions"] = [ext.replace("proj", "projection") for ext in self.stac_content["stac_extensions"]]
                 schemas = self.stac_content.get("stac_extensions", [])
                 for extension in schemas:
-                    if not (is_valid_url(extension) or extension.endswith(".json")):
-                        extension = f"https://cdn.staclint.com/v{self.version}/extension/{extension}.json"
+                    # where are the extensions for 1.0.0-beta.2 on cdn.staclint.com?
+                    if self.version == "1.0.0-beta.2":
+                        self.stac_content["stac_version"] = "1.0.0-beta.1"
+                        self.version = self.stac_content["stac_version"]
+                    extension = f"https://cdn.staclint.com/v{self.version}/extension/{extension}.json"
                     self.schema = extension
-                    self.core_validator()
+                    self.core_validator(stac_type)
                     message["schema"].append(extension)
         except jsonschema.exceptions.ValidationError as e:
             valid = False
@@ -173,7 +181,8 @@ class StacValidate:
         if stac_type == "ITEM":
             message = self.extensions_validator(stac_type)
             message["validation_method"] = "default"
-            message["schema"].append(core_schema)
+            if core_schema not in message["schema"]:
+                message["schema"].append(core_schema)
         
         return message 
 
@@ -266,6 +275,15 @@ class StacValidate:
                         not self.max_depth or self.max_depth < 5
                     ):  # TODO this should be configurable, correct?
                         self.message.append(message)
+
+                    # Print progress
+                    self.items_validated += 1
+                    elapsed_time = time.time() - self.start_time
+                    items_per_second = self.items_validated / elapsed_time
+                    progress_msg = f"Validated {self.items_validated} items at {items_per_second:.2f} items/second"
+                    sys.stdout.write('\r' + progress_msg)
+                    sys.stdout.flush()
+
         return True
 
     def run(self) -> dict:
@@ -345,3 +363,9 @@ class StacValidate:
                 f.write(json.dumps(self.message, indent=4))
 
         return self.valid
+    
+stac_file = "https://storage.googleapis.com/cfo-public/catalog.json"
+stac = StacValidate(stac_file, recursive = True)
+stac.run()
+#print(stac.message[0]['version'])
+print(json.dumps(stac.message, indent=4))
