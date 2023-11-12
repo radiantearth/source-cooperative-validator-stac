@@ -5,7 +5,31 @@ Description: Test the default which validates core and extensions
 
 from validators.stac_validator import validate
 
+def test_default_v100():
+    stac_file = 'https://raw.githubusercontent.com/radiantearth/stac-spec/master/examples/extended-item.json'
+    stac = validate.StacValidate(stac_file)
+    stac.run()
+    message = [
+            {
+                "version": "1.0.0",
+                "path": "https://raw.githubusercontent.com/radiantearth/stac-spec/master/examples/extended-item.json",
+                "schema": [
+                    "https://schemas.stacspec.org/v1.0.0/item-spec/json-schema/item.json",
+                    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+                    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+                    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json",
+                    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+                    "https://stac-extensions.github.io/remote-data/v1.0.0/schema.json",
+                ],
+                "valid_stac": True,
+                "asset_type": "ITEM",
+                "validation_method": "default"
+            }
+        ]
+    assert stac.message == message
+    
 
+'''
 def test_default_v070():
     stac_file = "https://radarstac.s3.amazonaws.com/stac/catalog.json"
     stac = validate.StacValidate(stac_file)
@@ -29,7 +53,7 @@ def test_default_v070():
         }
     ]
 
-'''
+
 def test_default_item_local_v080():
     stac_file = "tests/test_data/v080/items/sample-full.json"
     stac = StacValidate(stac_file)
@@ -83,7 +107,7 @@ def test_default_v1beta1():
             "valid_stac": True,
         }
     ]
-'''
+
 
 def test_default_proj_v1b2():
     stac_file = "https://earth-search.aws.element84.com/v0/collections/sentinel-s2-l1c/items/S2A_51SXT_20210415_0_L1C"
@@ -111,7 +135,7 @@ def test_default_proj_v1b2():
         }
     ]
 
-'''
+
 def test_default_simple_v1rc2():
     stac_file = "tests/test_data/1rc2/simple-item.json"
     stac = StacValidate(stac_file)

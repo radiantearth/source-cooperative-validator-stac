@@ -325,7 +325,7 @@ class StacValidate:
 
             # Use a list to store the tasks and then await them individually
             tasks = []
-            sem = asyncio.Semaphore()
+            #sem = asyncio.Semaphore()
             async with aiohttp.ClientSession() as session:
                 for link in self.stac_content["links"]:
                     if link["rel"] in {"child", "item"}:

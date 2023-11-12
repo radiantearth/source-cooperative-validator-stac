@@ -1,8 +1,12 @@
+import cProfile
 import json
 import os
 import time
 import sys
 from json.decoder import JSONDecodeError
+
+import pathlib
+
 from typing import Optional
 from urllib.error import HTTPError, URLError
 
@@ -10,6 +14,19 @@ import click  # type: ignore
 import jsonschema  # type: ignore
 from jsonschema import RefResolver
 from requests import exceptions  # type: ignore
+
+stac_validator_path = pathlib.Path(__file__).parent.resolve()
+stac_schema_path = f"{stac_validator_path}/stac_schemas/v1.0.0/"
+
+schema_files = ['schema', 'schema_store'] # Load schema and schema definitions i.e basics, datetime etc.
+schemas = {}
+for file in schema_files:
+    with open(f"{stac_schema_path}/{file}.json") as f:
+        schemas[file] = json.load(f)
+
+from jsonschema import RefResolver, Draft7Validator
+resolver = RefResolver.from_schema(schemas['schema'], store=schemas['schema_store']) # Resolve without making requests
+validator = Draft7Validator(schemas['schema'], resolver=resolver)
 
 from validators.stac_validator.stac_utilities import (
     get_stac_type,
@@ -37,7 +54,7 @@ class StacValidate:
     ):
         self.stac_file = stac_file
         self.items_validated = 0
-        self.start_time = time.time()
+        self.start_time = 0
 
         self.message = []
         self.schema = custom
@@ -93,7 +110,7 @@ class StacValidate:
         self.stac_type = get_stac_type(self.stac_content).lower()
         self.version = self.stac_content["stac_version"]
     
-    def core_validator(self, stac_type:str):
+    def core_validator(self, stac_type:str, extensions: bool = False):
         """Validate the STAC item or collection against the appropriate JSON schema.
 
         Args:
@@ -109,11 +126,21 @@ class StacValidate:
         If the version is one of the specified versions (0.8.0, 0.9.0, 1.0.0, 1.0.0-beta.1, 1.0.0-beta.2, or 1.0.0-rc.2),
         it retrieves the schema from the appropriate URL using the `set_schema_addr` function.
         """
+        
         stac_type = stac_type.lower()
-        self.schema = set_stac_schema_addr(self.version, stac_type)
-        if is_valid_url(self.schema):
-            schema = fetch_and_parse_json(self.schema)
-            jsonschema.validate(self.stac_content, schema)
+        if stac_type == 'item':
+            if extensions == True:
+                if is_valid_url(self.schema):
+                    schema = fetch_and_parse_json(self.schema)
+                    jsonschema.validate(self.stac_content, schema)
+            else:
+                validator.validate(self.stac_content)
+        else:
+            self.schema = set_stac_schema_addr(self.version, stac_type)
+            if is_valid_url(self.schema):
+                schema = fetch_and_parse_json(self.schema)
+                #print(self.stac_content,'\n')
+                jsonschema.validate(self.stac_content, schema)
 
     def extensions_validator(self, stac_type: str) -> dict:
         """Validate the STAC extensions according to their corresponding JSON schemas.
@@ -139,17 +166,22 @@ class StacValidate:
 
         try:
             if "stac_extensions" in self.stac_content:
-                self.stac_content["stac_extensions"] = [ext.replace("proj", "projection") for ext in self.stac_content["stac_extensions"]]
-                schemas = self.stac_content.get("stac_extensions", [])
+                if "proj" in self.stac_content["stac_extensions"]:
+                    index = self.stac_content["stac_extensions"].index("proj")
+                    self.stac_content["stac_extensions"][index] = "projection"
+                schemas = self.stac_content["stac_extensions"]
+                
                 for extension in schemas:
-                    # where are the extensions for 1.0.0-beta.2 on cdn.staclint.com?
-                    if self.version == "1.0.0-beta.2":
-                        self.stac_content["stac_version"] = "1.0.0-beta.1"
-                        self.version = self.stac_content["stac_version"]
-                    extension = f"https://cdn.staclint.com/v{self.version}/extension/{extension}.json"
+                    if not (is_valid_url(extension) or extension.endswith(".json")):
+                        # where are the extensions for 1.0.0-beta.2 on cdn.staclint.com?
+                        if self.version == "1.0.0-beta.2":
+                            self.stac_content["stac_version"] = "1.0.0-beta.1"
+                            self.version = self.stac_content["stac_version"]
+                        extension = f"https://cdn.staclint.com/v{self.version}/extension/{extension}.json"
                     self.schema = extension
-                    self.core_validator(stac_type)
+                    self.core_validator(stac_type, extensions=True)
                     message["schema"].append(extension)
+                
         except jsonschema.exceptions.ValidationError as e:
             valid = False
             err_msg = f"{e.message}. Error is in {' -> '.join([str(i) for i in e.absolute_path])}"
@@ -186,33 +218,16 @@ class StacValidate:
         
         return message 
 
-    def recursive_validator(self, stac_type:str) -> bool:
-        """Recursively validate a STAC JSON document against its JSON Schema.
-
-        This method validates a STAC JSON document recursively against its JSON Schema by following its "child" and "item" links.
-        It uses the `default_validator` and `fetch_and_parse_schema` functions to validate the current STAC document and retrieve the
-        next one to be validated, respectively.
-
-        Args:
-            self: An instance of the STACValidator class.
-            stac_type: A string representing the STAC object type to validate.
-
-        Returns:
-            A boolean indicating whether the validation was successful.
-
-        Raises:
-            jsonschema.exceptions.ValidationError: If the STAC document does not validate against its JSON Schema.
-
-        """
-        # TO DO: make stac_type lower throughout code
+    def recursive_validator(self, stac_type: str) -> bool:
+        """Recursively validate a STAC JSON document against its JSON Schema."""
         if self.skip_val is False:
             self.schema = set_stac_schema_addr(self.version, stac_type.lower())
 
             message = self.create_message(stac_type, "recursive")
             message["valid_stac"] = False
+
             try:
                 _ = self.default_validator(stac_type)
-
             except jsonschema.exceptions.ValidationError as e:
                 if e.absolute_path:
                     err_msg = f"{e.message}. Error is in {' -> '.join([str(i) for i in e.absolute_path])}"
@@ -249,7 +264,7 @@ class StacValidate:
                     else:
                         self.stac_file = address
 
-                    self.stac_content = fetch_and_parse_json(str(self.stac_file))
+                    self.stac_content = fetch_and_parse_file(str(self.stac_file))
                     self.stac_content["stac_version"] = self.version
                     stac_type = get_stac_type(self.stac_content).lower()
 
@@ -261,30 +276,37 @@ class StacValidate:
                     message = self.create_message(stac_type, "recursive")
                     if self.version == "0.7.0":
                         schema = fetch_and_parse_json(self.schema)
-                        # this next line prevents this: unknown url type: 'geojson.json' ??
                         schema["allOf"] = [{}]
                         jsonschema.validate(self.stac_content, schema)
                     else:
+                        stt = time.time()
                         msg = self.default_validator(stac_type)
                         message["schema"] = msg["schema"]
+
                     message["valid_stac"] = True
 
                     if self.log != "":
                         self.message.append(message)
                     if (
                         not self.max_depth or self.max_depth < 5
-                    ):  # TODO this should be configurable, correct?
+                    ):
                         self.message.append(message)
 
                     # Print progress
-                    self.items_validated += 1
+
+                    if stac_type == 'item':
+                        if self.start_time == 0:
+                            self.start_time = time.time()
+                        self.items_validated += 1
                     elapsed_time = time.time() - self.start_time
                     items_per_second = self.items_validated / elapsed_time
                     progress_msg = f"Validated {self.items_validated} items at {items_per_second:.2f} items/second"
+
                     sys.stdout.write('\r' + progress_msg)
                     sys.stdout.flush()
 
         return True
+
 
     def run(self) -> dict:
         """Runs the STAC validation process based on the input parameters.
@@ -363,9 +385,4 @@ class StacValidate:
                 f.write(json.dumps(self.message, indent=4))
 
         return self.valid
-    
-stac_file = "https://storage.googleapis.com/cfo-public/catalog.json"
-stac = StacValidate(stac_file, recursive = True)
-stac.run()
-#print(stac.message[0]['version'])
-print(json.dumps(stac.message, indent=4))
+
